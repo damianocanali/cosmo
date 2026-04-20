@@ -160,6 +160,46 @@ export function buildShipModel() {
   root.add(engineLight);
   root.userData.engineLight = engineLight;
 
+  // ── Engine flame trails ──────────────────────────────────────
+  // Cone points along +Z (backward from the ship) — wide at the engine
+  // exhaust, narrow at the tip. Additive blending makes it read as light.
+  // Scale.z is driven by throttle every frame.
+  const flameMat = new THREE.MeshBasicMaterial({
+    color: 0xaaddff,
+    transparent: true,
+    opacity: 0.0,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+  });
+  const flameCoreMat = new THREE.MeshBasicMaterial({
+    color: 0xffffff,
+    transparent: true,
+    opacity: 0.0,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+  });
+  const engineFlames = [];
+  for (const side of [-1, 1]) {
+    // Outer bluish cone
+    const outer = new THREE.Mesh(
+      new THREE.ConeGeometry(0.55, 3.5, 10, 1, true),
+      flameMat.clone()
+    );
+    outer.rotation.x = Math.PI / 2; // flip so apex points +Z (backward)
+    outer.position.set(side * 1.6, 0, 5.9 + 1.75);
+    root.add(outer);
+    // Inner white-hot core, shorter and narrower
+    const core = new THREE.Mesh(
+      new THREE.ConeGeometry(0.28, 2.0, 8, 1, true),
+      flameCoreMat.clone()
+    );
+    core.rotation.x = Math.PI / 2;
+    core.position.set(side * 1.6, 0, 5.9 + 1.0);
+    root.add(core);
+    engineFlames.push({ outer, core });
+  }
+  root.userData.engineFlames = engineFlames;
+
   // Store references for animation
   root.userData.wingLightR = lightR;
   root.userData.wingLightL = lightL;

@@ -17,15 +17,27 @@ export class ShipController {
    * @param {HTMLCanvasElement} canvas
    * @param {THREE.Scene} threeScene           Scene to add the external ship to
    */
-  constructor(camera, canvas, threeScene) {
+  constructor(camera, canvas, threeScene, { onViewChange } = {}) {
     this.camera = camera;
     this.canvas = canvas;
     this.threeScene = threeScene;
+    this.onViewChange = onViewChange;
 
-    this.yaw = 0;
-    this.pitch = 0;
+    // Mouse rotates the CAMERA view, not the ship directly.
+    // The ship's own heading (shipYaw/shipPitch) lerps toward the camera
+    // so the ship visibly turns to face where you're thrusting — mouse
+    // feels like "look around", ship feels like "go where I'm pointing".
+    this.cameraYaw = 0;
+    this.cameraPitch = 0;
+    this.shipYaw = 0;
+    this.shipPitch = 0;
     this.roll = 0; // auto-banking angle — not directly controlled
     this.velocity = new THREE.Vector3();
+    // Ship anchor — source of truth for where the ship is in the world.
+    // In cockpit view the camera sits ON it; in external view the camera
+    // sits behind it. Using camera.position as the anchor would feed the
+    // external offset back in every frame and the ship would drift.
+    this.shipPosition = new THREE.Vector3();
 
     this.throttle = 0; // 0..1 — ramps up as you hold W
     this.maxSpeed = 400; // units/s at boost
@@ -46,8 +58,11 @@ export class ShipController {
     this.shipModel.visible = false; // off by default (cockpit view)
     this.threeScene.add(this.shipModel);
 
-    // A camera rig: in external mode the camera orbits behind the ship
-    this.externalOffset = new THREE.Vector3(0, 2.5, 12);
+    // A camera rig: in external mode the camera orbits behind the ship.
+    // Ship bounding box is ~12 long × 11 wide — offset needs to sit well
+    // behind the engines (~z=5.6) to keep the whole hero in frame at 70°
+    // vertical FOV.
+    this.externalOffset = new THREE.Vector3(0, 4, 22);
 
     this.bindEvents();
   }
@@ -65,9 +80,9 @@ export class ShipController {
     this._mouseup   = () => { this.mouseLook = false; this.canvas.style.cursor = 'crosshair'; };
     this._mousemove = (e) => {
       if (!this.mouseLook) return;
-      this.yaw   -= e.movementX * 0.003;
-      this.pitch -= e.movementY * 0.003;
-      this.pitch = Math.max(-Math.PI / 2 + 0.1, Math.min(Math.PI / 2 - 0.1, this.pitch));
+      this.cameraYaw   -= e.movementX * 0.003;
+      this.cameraPitch -= e.movementY * 0.003;
+      this.cameraPitch = Math.max(-Math.PI / 2 + 0.1, Math.min(Math.PI / 2 - 0.1, this.cameraPitch));
     };
     this.canvas.addEventListener('mousedown', this._mousedown);
     window.addEventListener('mouseup', this._mouseup);
@@ -85,15 +100,24 @@ export class ShipController {
 
   syncFromCameraPosition(target = new THREE.Vector3(0, 0, 0)) {
     const lookDir = target.clone().sub(this.camera.position).normalize();
-    this.yaw = Math.atan2(lookDir.x, lookDir.z);
-    this.pitch = Math.asin(lookDir.y);
+    const y = Math.atan2(lookDir.x, lookDir.z);
+    const p = Math.asin(lookDir.y);
+    this.cameraYaw = y;
+    this.cameraPitch = p;
+    // Snap ship orientation to camera on sync — otherwise the ship would
+    // spin to catch up every time you change scenes.
+    this.shipYaw = y;
+    this.shipPitch = p;
     this.velocity.set(0, 0, 0);
     this.throttle = 0;
+    // Anchor the ship wherever the scene placed the camera.
+    this.shipPosition.copy(this.camera.position);
   }
 
   toggleView() {
     this.viewMode = this.viewMode === 'cockpit' ? 'external' : 'cockpit';
     this.shipModel.visible = this.viewMode === 'external';
+    if (this.onViewChange) this.onViewChange(this.viewMode);
   }
 
   setScale(factor) { this.scaleFactor = factor; }
@@ -107,92 +131,117 @@ export class ShipController {
   }
 
   update(dt) {
-    // Build orientation quaternion from yaw/pitch (no roll input;
-    // roll is auto-generated for visual feedback).
-    const qYawPitch = new THREE.Quaternion().setFromEuler(
-      new THREE.Euler(this.pitch, this.yaw, 0, 'YXZ')
+    // ── Camera orientation (mouse-driven) ───────────────────────────
+    const qCamera = new THREE.Quaternion().setFromEuler(
+      new THREE.Euler(this.cameraPitch, this.cameraYaw, 0, 'YXZ')
     );
 
-    // Ramp throttle based on W/S input
+    // Thrust is CAMERA-relative — W goes where you're looking.
+    const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(qCamera);
+    const right   = new THREE.Vector3(1, 0, 0).applyQuaternion(qCamera);
+    const worldUp = new THREE.Vector3(0, 1, 0);
+
     const boost = (this.keys['ShiftLeft'] || this.keys['ShiftRight']) ? 1 : 0;
     const wantForward = this.keys['KeyW'] ? 1 : (this.keys['KeyS'] ? -0.6 : 0);
     const throttleTarget = Math.abs(wantForward) * (1 + boost * 1.5);
     this.throttle += (throttleTarget - this.throttle) * Math.min(1, dt * 2.5);
 
-    const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(qYawPitch);
-    const right   = new THREE.Vector3(1, 0, 0).applyQuaternion(qYawPitch);
-    const up      = new THREE.Vector3(0, 1, 0).applyQuaternion(qYawPitch);
-
     const effectiveAccel = this.accel * this.scaleFactor * (1 + boost * 2.5);
 
-    // Forward thrust via throttle
     if (wantForward !== 0) {
-      this.velocity.addScaledVector(forward, Math.sign(wantForward) * this.throttle * effectiveAccel * dt);
+      this.velocity.addScaledVector(
+        forward,
+        Math.sign(wantForward) * this.throttle * effectiveAccel * dt
+      );
     }
-    // Strafe (A/D) — less powerful than forward thrust
     if (this.keys['KeyA']) this.velocity.addScaledVector(right, -effectiveAccel * 0.5 * dt);
     if (this.keys['KeyD']) this.velocity.addScaledVector(right,  effectiveAccel * 0.5 * dt);
-    // Vertical
-    if (this.keys['Space']) this.velocity.addScaledVector(up,  effectiveAccel * 0.5 * dt);
+    if (this.keys['Space']) this.velocity.addScaledVector(worldUp,  effectiveAccel * 0.5 * dt);
     if (this.keys['ControlLeft'] || this.keys['ControlRight']) {
-      this.velocity.addScaledVector(up, -effectiveAccel * 0.5 * dt);
+      this.velocity.addScaledVector(worldUp, -effectiveAccel * 0.5 * dt);
     }
 
-    // Cap at max speed
     const maxV = this.maxSpeed * this.scaleFactor * (1 + boost * 2);
-    if (this.velocity.length() > maxV) {
-      this.velocity.setLength(maxV);
-    }
+    if (this.velocity.length() > maxV) this.velocity.setLength(maxV);
     this.velocity.multiplyScalar(this.drag);
 
-    // Visual bank: when the player strafes or looks sharply sideways, tilt
+    // Integrate ship position
+    this.shipPosition.addScaledVector(this.velocity, dt);
+
+    // ── Ship heading lerps toward camera view ──────────────────────
+    // So the ship visibly turns to match where you're thrusting, but
+    // mouse itself doesn't snap the ship — it glides. Angle-wrap so
+    // yaw going from 179° to -179° takes the short way.
+    const turnK = 1 - Math.exp(-5.5 * dt);
+    this.shipYaw   = lerpAngle(this.shipYaw,   this.cameraYaw,   turnK);
+    this.shipPitch = this.shipPitch + (this.cameraPitch - this.shipPitch) * turnK;
+
+    // Auto-bank on strafe for visual flair
     const strafe = (this.keys['KeyD'] ? 1 : 0) - (this.keys['KeyA'] ? 1 : 0);
     const rollTarget = -strafe * 0.25;
     this.roll += (rollTarget - this.roll) * Math.min(1, dt * 4);
 
-    // Final camera orientation with roll applied
+    const qShipOrient = new THREE.Quaternion().setFromEuler(
+      new THREE.Euler(this.shipPitch, this.shipYaw, 0, 'YXZ')
+    );
     const qRoll = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), this.roll);
-    const qFinal = qYawPitch.clone().multiply(qRoll);
+    const qShipFinal = qShipOrient.clone().multiply(qRoll);
 
-    // ── Apply to external ship model (always updated; just toggled on) ──
-    const shipWorldPos = this.camera.position.clone();
-    // Position ship slightly below/behind the camera in cockpit view,
-    // so the external model aligns with where the player "is" in the ship.
-    this.shipModel.position.copy(shipWorldPos);
-    this.shipModel.quaternion.copy(qFinal);
+    // ── Ship model ──────────────────────────────────────────────────
+    this.shipModel.position.copy(this.shipPosition);
+    this.shipModel.quaternion.copy(qShipFinal);
 
-    // ── Move the camera based on view mode ──────────────────────────
+    // ── Camera ──────────────────────────────────────────────────────
+    // Camera orientation always follows mouse (qCamera). In external view
+    // the camera orbits behind the ship at externalOffset rotated into the
+    // camera frame — so looking up/down/around in 3rd person circles the
+    // ship, rather than yanking it along.
     if (this.viewMode === 'external') {
-      // Orbit camera behind the ship
-      const offset = this.externalOffset.clone().applyQuaternion(qFinal);
-      const shipPos = shipWorldPos.clone().sub(
-        new THREE.Vector3(0, 0, -1).applyQuaternion(qFinal).multiplyScalar(0) // no offset; ship IS at camera pos
-      );
-      // Move camera to trail position
-      this.camera.position.copy(shipPos).add(offset);
-      this.camera.quaternion.copy(qFinal);
-      // Apply velocity to ship position (which is camera position)
-      this.camera.position.addScaledVector(this.velocity, dt);
+      const offset = this.externalOffset.clone().applyQuaternion(qCamera);
+      this.camera.position.copy(this.shipPosition).add(offset);
+      this.camera.quaternion.copy(qCamera);
     } else {
-      // Cockpit view: camera IS the ship
-      this.camera.quaternion.copy(qFinal);
-      this.camera.position.addScaledVector(this.velocity, dt);
+      this.camera.position.copy(this.shipPosition);
+      this.camera.quaternion.copy(qCamera);
     }
 
-    // Animate wing lights (blink)
+    // ── Ship lights & flames ────────────────────────────────────────
     if (this.shipModel.userData.wingLightL) {
       const blink = ((Math.sin(performance.now() * 0.002) + 1) * 0.5) > 0.5 ? 1 : 0.1;
       this.shipModel.userData.wingLightL.material.emissiveIntensity = 1 + blink;
       this.shipModel.userData.wingLightR.material.emissiveIntensity = 1 + blink;
     }
-    // Engine light pulse with throttle
     if (this.shipModel.userData.engineLight) {
       this.shipModel.userData.engineLight.intensity = 1.5 + this.throttle * 3;
+    }
+    // Engine flames scale with throttle. Only on forward thrust (W), not
+    // reverse — reversing shouldn't look like you're accelerating forward.
+    const flames = this.shipModel.userData.engineFlames;
+    if (flames) {
+      const forwardThrottle = this.keys['KeyW'] ? this.throttle : 0;
+      const flicker = 0.9 + 0.1 * Math.sin(performance.now() * 0.04);
+      for (const { outer, core } of flames) {
+        outer.scale.z = (0.3 + forwardThrottle * 1.6) * flicker;
+        outer.material.opacity = Math.min(0.9, forwardThrottle * 0.9);
+        core.scale.z = (0.2 + forwardThrottle * 1.2) * flicker;
+        core.material.opacity = Math.min(0.95, forwardThrottle * 1.1);
+      }
     }
   }
 
   // Compatibility with old FlyCamera API — HUD reads these
   speedNow() { return this.velocity.length(); }
   get vel() { return this.velocity; }
+  // Ship's visible heading (what the radar triangle should match)
+  get heading() { return this.shipYaw; }
   isKeyDown(code) { return !!this.keys[code]; }
+}
+
+// Shortest-path angular interpolation. Needed because raw lerp on angles
+// would take the long way around when wrapping past ±π.
+function lerpAngle(a, b, t) {
+  let d = b - a;
+  while (d >  Math.PI) d -= Math.PI * 2;
+  while (d < -Math.PI) d += Math.PI * 2;
+  return a + d * t;
 }

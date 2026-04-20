@@ -33,6 +33,7 @@ import { PlanetSurfaceScene } from './scenes/PlanetSurfaceScene.js';
 
 import { Hud } from './ui/hud.js';
 import { Panel } from './ui/panel.js';
+import { Radar } from './ui/radar.js';
 
 // ─── Engine setup ─────────────────────────────────────────────────
 const canvas = document.getElementById('canvas');
@@ -46,7 +47,15 @@ attachResize(renderer, camera);
 
 // Ship controller replaces FlyCamera. It exposes the same speedNow() / vel API
 // so the HUD keeps working unchanged.
-const ship = new ShipController(camera, canvas, threeScene);
+const ship = new ShipController(camera, canvas, threeScene, {
+  onViewChange: (mode) => {
+    // Cockpit is only visible in space scenes AND when in 1st-person view.
+    // Without this, flipping to external leaves the cockpit hovering in front
+    // of the camera and you can't see the ship.
+    const inSpace = isSpaceScene(state.sceneName);
+    cockpit.setVisible(inSpace && mode === 'cockpit');
+  },
+});
 
 // Cockpit is its own Group added to the scene; visible only in space scenes.
 const cockpit = new Cockpit();
@@ -58,6 +67,7 @@ threeScene.add(skybox);
 
 const sceneManager = new SceneManager(threeScene);
 const hud = new Hud();
+const radar = new Radar();
 
 // ─── App state ────────────────────────────────────────────────────
 const state = {
@@ -77,20 +87,10 @@ function rebuildActiveScene() {
   const scene = createSceneByName(state.sceneName);
   sceneManager.setScene(scene);
 
-  // Cockpit visibility follows scene type; ship model follows view mode.
+  // Cockpit visibility follows scene type AND view mode; ship model follows view mode.
   const inSpace = isSpaceScene(state.sceneName);
-  cockpit.setVisible(inSpace);
-
-  if (inSpace) {
-    // Return to cockpit view by default when entering a space scene
-    if (ship.viewMode === 'external' && state.sceneName === 'planet') {
-      ship.toggleView();
-    }
-    ship.shipModel.visible = ship.viewMode === 'external';
-  } else {
-    // On planet surface: hide cockpit AND the external ship (you're "outside")
-    ship.shipModel.visible = false;
-  }
+  cockpit.setVisible(inSpace && ship.viewMode === 'cockpit');
+  ship.shipModel.visible = inSpace && ship.viewMode === 'external';
 }
 
 function createSceneByName(name) {
@@ -186,6 +186,12 @@ function loop(t) {
     universeName: state.universeName,
     sceneName: state.sceneName,
     target,
+  });
+
+  const mapData = sceneManager.activeScene?.getMapData?.() ?? null;
+  radar.draw({
+    mapData,
+    ship: { pos: ship.shipPosition, heading: ship.heading },
   });
 
   renderer.render(threeScene, camera);

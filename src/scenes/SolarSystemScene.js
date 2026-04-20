@@ -178,6 +178,17 @@ export class SolarSystemScene {
     }
   }
 
+  getMapData() {
+    return {
+      title: 'Local Chart',
+      star: { pos: this.star.position, color: this.starColor },
+      planets: this.planets.map((p) => ({
+        pos: p.mesh.position,
+        biome: p.planetData.biome,
+      })),
+    };
+  }
+
   dispose() {
     if (this.landListener) {
       window.removeEventListener('keydown', this.landListener);
