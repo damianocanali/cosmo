@@ -136,7 +136,7 @@ function landOnPlanet(planet, starColor) {
   });
   sceneManager.setScene(scene);
   cockpit.setVisible(false);
-  ship.shipModel.visible = false;
+  ship.shipModel.visible = true;
 }
 
 // ─── UI wiring ────────────────────────────────────────────────────
