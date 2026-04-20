@@ -22,6 +22,7 @@ import {
 
 import { createRenderer, createCamera, attachResize } from './engine/renderer.js';
 import { ShipController } from './engine/shipController.js';
+import { CharacterController } from './engine/characterController.js';
 import { Cockpit } from './engine/cockpit.js';
 import { createSkybox } from './engine/skybox.js';
 import { SceneManager } from './engine/sceneManager.js';
@@ -53,13 +54,16 @@ const ship = new ShipController(camera, canvas, threeScene, {
     // Without this, flipping to external leaves the cockpit hovering in front
     // of the camera and you can't see the ship.
     const inSpace = isSpaceScene(state.sceneName);
-    cockpit.setVisible(inSpace && mode === 'cockpit');
+    const onFoot = character.active;
+    cockpit.setVisible(inSpace && mode === 'cockpit' && !onFoot);
   },
 });
 
 // Cockpit is its own Group added to the scene; visible only in space scenes.
 const cockpit = new Cockpit();
 cockpit.addToScene(threeScene);
+
+const character = new CharacterController(camera, canvas, threeScene);
 
 // Skybox persists across scenes
 const skybox = createSkybox(hashString('GLOBAL_SKYBOX'));
@@ -89,8 +93,10 @@ function rebuildActiveScene() {
 
   // Cockpit visibility follows scene type AND view mode; ship model follows view mode.
   const inSpace = isSpaceScene(state.sceneName);
-  cockpit.setVisible(inSpace && ship.viewMode === 'cockpit');
-  ship.shipModel.visible = inSpace && ship.viewMode === 'external';
+  const onFoot = character.active;
+  cockpit.setVisible(inSpace && ship.viewMode === 'cockpit' && !onFoot);
+  ship.shipModel.visible = (inSpace && ship.viewMode === 'external') || state.sceneName === 'planet';
+  character.setActive(false);
 }
 
 function createSceneByName(name) {
@@ -119,8 +125,10 @@ function landOnPlanet(planet, starColor) {
   const scene = new PlanetSurfaceScene({
     planet,
     starColor,
+    universe: state.universe,
     camera,
     flyCamera: ship,
+    characterController: character,
     onLeave: () => {
       state.sceneName = state.prevSpaceScene;
       rebuildActiveScene();
@@ -179,20 +187,25 @@ function loop(t) {
     });
   }
 
+  const activeScene = sceneManager.activeScene;
+  const promptText = activeScene?.getPromptForHud?.() ?? null;
+  const onFoot = character.active;
+
   hud.update({
     camera,
-    flyCamera: ship,
+    flyCamera: onFoot ? character : ship,
     universe: state.universe,
     universeName: state.universeName,
     sceneName: state.sceneName,
     target,
+    prompt: promptText,
   });
 
   const mapData = sceneManager.activeScene?.getMapData?.() ?? null;
-  radar.draw({
-    mapData,
-    ship: { pos: ship.shipPosition, heading: ship.heading },
-  });
+  const radarShip = onFoot
+    ? { pos: character.position, heading: character.cameraYaw }
+    : { pos: ship.shipPosition, heading: ship.heading };
+  radar.draw({ mapData, ship: radarShip });
 
   renderer.render(threeScene, camera);
   requestAnimationFrame(loop);
