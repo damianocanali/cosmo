@@ -6,12 +6,13 @@
 //   land request     → swap to PlanetSurfaceScene with chosen planet
 //   esc on surface   → return to SolarSystemScene with same constants
 //
-// Ship & cockpit:
-//   - In all space scenes, the ship controller drives the camera with inertia
-//     and a cockpit overlay surrounds the view.
-//   - Press C to toggle between cockpit (1st person) and external (3rd person).
-//   - On a planet surface, the cockpit hides and movement drag is higher
-//     (atmospheric drag analog). Actual character disembark is a future step.
+// Ship & character:
+//   - In space scenes, ShipController drives the camera (cockpit or external).
+//   - On a planet, PlanetSurfaceScene runs a small state machine and swaps
+//     input ownership between ShipController (parked, for liftoff) and
+//     CharacterController (on-foot, WASD + gravity-aware jump).
+//   - Press C to toggle 1st/3rd person in whichever controller is active.
+//   - Press F on the surface to disembark / re-enter the ship.
 
 import * as THREE from 'three';
 import {

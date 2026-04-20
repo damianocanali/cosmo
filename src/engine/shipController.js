@@ -75,7 +75,11 @@ export class ShipController {
   }
 
   bindEvents() {
+    // Guarded by controlsEnabled so on-foot key/mouse input doesn't leak into
+    // the ship (would silently drift its camera, and a C press would toggle
+    // the ship's view mode and hide the parked model).
     this._keydown = (e) => {
+      if (!this.controlsEnabled) return;
       this.keys[e.code] = true;
       if (e.code === 'KeyC') this.toggleView();
     };
@@ -83,10 +87,14 @@ export class ShipController {
     window.addEventListener('keydown', this._keydown);
     window.addEventListener('keyup', this._keyup);
 
-    this._mousedown = () => { this.mouseLook = true; this.canvas.style.cursor = 'none'; };
+    this._mousedown = () => {
+      if (!this.controlsEnabled) return;
+      this.mouseLook = true;
+      this.canvas.style.cursor = 'none';
+    };
     this._mouseup   = () => { this.mouseLook = false; this.canvas.style.cursor = 'crosshair'; };
     this._mousemove = (e) => {
-      if (!this.mouseLook) return;
+      if (!this.controlsEnabled || !this.mouseLook) return;
       this.cameraYaw   -= e.movementX * 0.003;
       this.cameraPitch -= e.movementY * 0.003;
       this.cameraPitch = Math.max(-Math.PI / 2 + 0.1, Math.min(Math.PI / 2 - 0.1, this.cameraPitch));
