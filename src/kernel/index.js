@@ -6,3 +6,4 @@ export * from './physics.js';
 export * from './branching.js';
 export * from './planets.js';
 export * from './terrain.js';
+export * from './scatter.js';

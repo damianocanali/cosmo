@@ -5,6 +5,13 @@
 //   scene button     → instantiate new scene → SceneManager.setScene()
 //   land request     → swap to PlanetSurfaceScene with chosen planet
 //   esc on surface   → return to SolarSystemScene with same constants
+//
+// Ship & cockpit:
+//   - In all space scenes, the ship controller drives the camera with inertia
+//     and a cockpit overlay surrounds the view.
+//   - Press C to toggle between cockpit (1st person) and external (3rd person).
+//   - On a planet surface, the cockpit hides and movement drag is higher
+//     (atmospheric drag analog). Actual character disembark is a future step.
 
 import * as THREE from 'three';
 import {
@@ -14,7 +21,8 @@ import {
 } from './kernel/index.js';
 
 import { createRenderer, createCamera, attachResize } from './engine/renderer.js';
-import { FlyCamera } from './engine/flyCamera.js';
+import { ShipController } from './engine/shipController.js';
+import { Cockpit } from './engine/cockpit.js';
 import { createSkybox } from './engine/skybox.js';
 import { SceneManager } from './engine/sceneManager.js';
 
@@ -29,14 +37,22 @@ import { Panel } from './ui/panel.js';
 // ─── Engine setup ─────────────────────────────────────────────────
 const canvas = document.getElementById('canvas');
 const renderer = createRenderer(canvas);
+const DEFAULT_FOG = new THREE.FogExp2(0x000005, 0.0008);
+
 const threeScene = new THREE.Scene();
-threeScene.fog = new THREE.FogExp2(0x000005, 0.0008);
+threeScene.fog = DEFAULT_FOG;
 const camera = createCamera();
 attachResize(renderer, camera);
 
-const flyCamera = new FlyCamera(camera, canvas);
+// Ship controller replaces FlyCamera. It exposes the same speedNow() / vel API
+// so the HUD keeps working unchanged.
+const ship = new ShipController(camera, canvas, threeScene);
 
-// Skybox lives outside the scene manager — it persists across scenes
+// Cockpit is its own Group added to the scene; visible only in space scenes.
+const cockpit = new Cockpit();
+cockpit.addToScene(threeScene);
+
+// Skybox persists across scenes
 const skybox = createSkybox(hashString('GLOBAL_SKYBOX'));
 threeScene.add(skybox);
 
@@ -49,19 +65,39 @@ const state = {
   universe: generateUniverse(VANILLA_CONSTANTS, 'ROOT'),
   universeName: 'Vanilla',
   sceneName: 'solar',
-  prevSpaceScene: 'solar',  // remembered when on planet surface
+  prevSpaceScene: 'solar',
 };
 
+function isSpaceScene(name) {
+  return name === 'solar' || name === 'galaxy' || name === 'blackhole';
+}
+
 function rebuildActiveScene() {
+  threeScene.fog = DEFAULT_FOG;
   const scene = createSceneByName(state.sceneName);
   sceneManager.setScene(scene);
+
+  // Cockpit visibility follows scene type; ship model follows view mode.
+  const inSpace = isSpaceScene(state.sceneName);
+  cockpit.setVisible(inSpace);
+
+  if (inSpace) {
+    // Return to cockpit view by default when entering a space scene
+    if (ship.viewMode === 'external' && state.sceneName === 'planet') {
+      ship.toggleView();
+    }
+    ship.shipModel.visible = ship.viewMode === 'external';
+  } else {
+    // On planet surface: hide cockpit AND the external ship (you're "outside")
+    ship.shipModel.visible = false;
+  }
 }
 
 function createSceneByName(name) {
   const ctx = {
     universe: state.universe,
     camera,
-    flyCamera,
+    flyCamera: ship, // name kept for scene compatibility
   };
   switch (name) {
     case 'solar':
@@ -79,18 +115,20 @@ function createSceneByName(name) {
 function landOnPlanet(planet, starColor) {
   state.prevSpaceScene = state.sceneName;
   state.sceneName = 'planet';
-  panel.setActiveScene('solar'); // panel still shows solar selected; planet is sub-state
+  panel.setActiveScene('solar');
   const scene = new PlanetSurfaceScene({
     planet,
     starColor,
     camera,
-    flyCamera,
+    flyCamera: ship,
     onLeave: () => {
       state.sceneName = state.prevSpaceScene;
       rebuildActiveScene();
     },
   });
   sceneManager.setScene(scene);
+  cockpit.setVisible(false);
+  ship.shipModel.visible = false;
 }
 
 // ─── UI wiring ────────────────────────────────────────────────────
@@ -98,9 +136,10 @@ const panel = new Panel({
   onConstantsChange: (c, name) => {
     state.constants = { ...c };
     state.universeName = name;
-    state.universe = generateUniverse(state.constants, hashString(JSON.stringify(state.constants)).toString());
-    // Surface scenes are tied to a specific planet; changing constants
-    // here means the planet derivation would change → return to space.
+    state.universe = generateUniverse(
+      state.constants,
+      hashString(JSON.stringify(state.constants)).toString()
+    );
     if (state.sceneName === 'planet') {
       state.sceneName = state.prevSpaceScene;
     }
@@ -121,15 +160,28 @@ function loop(t) {
   lastT = t;
   totalT += dt;
 
-  flyCamera.update(dt);
+  ship.update(dt);
   sceneManager.update(dt, totalT);
   skybox.rotation.y += dt * 0.001;
 
   const target = sceneManager.findCrosshairTarget(camera);
 
+  // Update cockpit overlay (runs whether visible or not — cheap)
+  if (cockpit.group.visible) {
+    cockpit.update(dt, {
+      camera,
+      speed: ship.speedNow(),
+      maxSpeed: ship.maxSpeed * ship.scaleFactor * 3.5, // match the boost cap
+      position: camera.position,
+      sceneName: state.sceneName,
+      target,
+      throttle: ship.throttle,
+    });
+  }
+
   hud.update({
     camera,
-    flyCamera,
+    flyCamera: ship,
     universe: state.universe,
     universeName: state.universeName,
     sceneName: state.sceneName,
