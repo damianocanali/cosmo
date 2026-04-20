@@ -50,12 +50,14 @@ export class Hud {
       targetDist: document.getElementById('targetDist'),
       targetHint: document.getElementById('targetHint'),
 
+      prompt: document.getElementById('prompt'),
+
       sterile:       document.getElementById('sterile'),
       sterileReason: document.getElementById('sterileReason'),
     };
   }
 
-  update({ camera, flyCamera, universe, universeName, sceneName, target }) {
+  update({ camera, flyCamera, universe, universeName, sceneName, target, prompt }) {
     this.els.posX.textContent = camera.position.x.toFixed(0);
     this.els.posY.textContent = camera.position.y.toFixed(0);
     this.els.posZ.textContent = camera.position.z.toFixed(0);
@@ -85,6 +87,13 @@ export class Hud {
       this.els.targetHint.textContent = target.hint || '';
     } else {
       this.els.target.classList.remove('show');
+    }
+
+    if (prompt) {
+      this.els.prompt.textContent = prompt;
+      this.els.prompt.classList.add('show');
+    } else {
+      this.els.prompt.classList.remove('show');
     }
   }
 

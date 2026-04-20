@@ -120,3 +120,13 @@ body { font-family: 'Cormorant Garamond', Georgia, serif; color: #e8dfc8; }
   font-family: 'JetBrains Mono', monospace; font-size: 9px;
   color: #6b5d4a; letter-spacing: 0.15em; text-align: right;
 }
+
+#prompt {
+  position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%);
+  font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0.25em;
+  text-transform: uppercase; color: #c8b890;
+  padding: 6px 14px; border: 1px solid rgba(200, 184, 144, 0.25);
+  background: rgba(10, 8, 6, 0.65); backdrop-filter: blur(6px);
+  opacity: 0; transition: opacity 0.25s; z-index: 12;
+}
+#prompt.show { opacity: 1; }
