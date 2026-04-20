@@ -4,9 +4,11 @@ import {
   seaLevelFor,
   colorAtHeight,
   atmosphereColor,
+  surfaceGravity,
   BIOMES,
 } from '../kernel/index.js';
 import { buildSurfaceScatter } from '../engine/scatterRenderer.js';
+import { CharacterController } from '../engine/characterController.js';
 
 /**
  * PlanetSurfaceScene — descend onto a derived planet.
@@ -20,15 +22,23 @@ import { buildSurfaceScatter } from '../engine/scatterRenderer.js';
  *  - Subtle fog for depth
  */
 export class PlanetSurfaceScene {
-  constructor({ planet, starColor, camera, flyCamera, onLeave }) {
+  constructor({ planet, starColor, universe, camera, flyCamera, characterController, onLeave }) {
     this.planet = planet;
     this.starColor = starColor || new THREE.Color(1, 0.95, 0.8);
+    this.universe = universe;
     this.camera = camera;
-    this.flyCamera = flyCamera;
+    this.flyCamera = flyCamera;            // ShipController
+    this.character = characterController;  // CharacterController
     this.onLeave = onLeave;
     this.escListener = null;
+    this.fKeyListener = null;
     this.cloudMesh = null;
     this.atmosphere = null;
+
+    this.mode = 'in_ship';       // 'in_ship' | 'on_foot'
+    this.gravity = 0;            // computed in build()
+    this.landingSpot = new THREE.Vector3(); // where the ship touched down
+    this.landingYaw = 0;
   }
 
   build(mgr) {
@@ -208,40 +218,128 @@ export class PlanetSurfaceScene {
       mgr.threeScene.fog = null;
     }
 
-    // ── Position camera above terrain ──────────────────────────────
+    // ── Surface gravity (from the kernel) ──────────────────────────
+    this.gravity = surfaceGravity(this.universe, p);
+
+    // ── Land the ship at origin ────────────────────────────────────
     const startX = 0, startZ = 0;
     const groundY = sampleTerrainHeight(p, startX, startZ);
-    this.camera.position.set(startX, Math.max(groundY + 100, 80), startZ + 140);
+    this.landingSpot.set(startX, groundY, startZ);
+    this.landingYaw = 0;
+
+    // Put the ship on the ground, auto-3rd-person so the player sees they've landed.
     this.flyCamera.syncFromCameraPosition(new THREE.Vector3(startX, groundY, startZ));
     this.flyCamera.setScale(0.5);
+    this.flyCamera.shipPosition.set(startX, groundY + this.flyCamera.groundClearance, startZ);
+    this.flyCamera.setGrounded(true, groundY);
+    if (this.flyCamera.viewMode !== 'external') this.flyCamera.toggleView();
 
-    // ── Esc to return ──────────────────────────────────────────────
+    // Ship controls active; character dormant.
+    this.flyCamera.setControlsEnabled(true);
+    this.character.setActive(false);
+
+    // ── Esc to leave to space ──────────────────────────────────────
     this.escListener = (e) => {
-      if (e.code === 'Escape' && this.onLeave) this.onLeave();
+      if (e.code === 'Escape' && this.mode === 'in_ship' && this.onLeave) {
+        this.onLeave();
+      }
     };
     window.addEventListener('keydown', this.escListener);
+
+    // ── F to disembark / re-enter ──────────────────────────────────
+    this.fKeyListener = (e) => {
+      if (e.code !== 'KeyF') return;
+      if (this.mode === 'in_ship' && this.canDisembark()) this.disembark();
+      else if (this.mode === 'on_foot' && this.canReenter()) this.reenter();
+    };
+    window.addEventListener('keydown', this.fKeyListener);
+  }
+
+  canDisembark() {
+    // Only from the ground, with the ship resting on the landing pad.
+    return this.flyCamera.grounded;
+  }
+
+  canReenter() {
+    const d = this.character.position.distanceTo(this.flyCamera.shipPosition);
+    return d < 12; // ~ ship length
+  }
+
+  disembark() {
+    this.mode = 'on_foot';
+    // Drop the astronaut 4 units to the side of the ship, facing it.
+    const sideOffset = new THREE.Vector3(4, 0, 0);
+    const worldDrop = new THREE.Vector3().copy(this.flyCamera.shipPosition).add(sideOffset);
+    const groundY = sampleTerrainHeight(this.planet, worldDrop.x, worldDrop.z);
+    const faceShip = Math.atan2(
+      this.flyCamera.shipPosition.x - worldDrop.x,
+      this.flyCamera.shipPosition.z - worldDrop.z
+    );
+    this.character.enterAt(worldDrop, faceShip, groundY);
+    this.character.setActive(true);
+    this.flyCamera.setControlsEnabled(false);
+  }
+
+  reenter() {
+    this.mode = 'in_ship';
+    this.character.setActive(false);
+    this.flyCamera.setControlsEnabled(true);
+    // Snap camera back to the ship
+    if (this.flyCamera.viewMode === 'cockpit') {
+      this.camera.position.copy(this.flyCamera.shipPosition);
+    }
+  }
+
+  getPromptForHud() {
+    if (this.mode === 'in_ship' && this.canDisembark()) return 'F · disembark';
+    if (this.mode === 'on_foot' && this.canReenter())  return 'F · board ship';
+    return null;
+  }
+
+  getMapData() {
+    // Surface chart: local 200-unit radius centered on whichever controller is active.
+    // Draws the ship as a beacon.
+    const focus = this.mode === 'on_foot'
+      ? this.character.position
+      : this.flyCamera.shipPosition;
+    return {
+      title: 'Surface Chart',
+      surface: true,
+      focus: { x: focus.x, z: focus.z },
+      range: 200,
+      shipBeacon: {
+        x: this.flyCamera.shipPosition.x,
+        z: this.flyCamera.shipPosition.z,
+      },
+    };
   }
 
   update(dt) {
-    // Soft collision with ground
-    const cam = this.camera.position;
-    const ground = sampleTerrainHeight(this.planet, cam.x, cam.z);
-    const minHeight = ground + 5;
-    if (cam.y < minHeight) {
-      cam.y = minHeight;
-      if (this.flyCamera.vel.y < 0) this.flyCamera.vel.y = 0;
+    const p = this.planet;
+
+    if (this.mode === 'in_ship') {
+      // Ship is grounded; update groundY under it each frame so hills work.
+      const sy = sampleTerrainHeight(p, this.flyCamera.shipPosition.x, this.flyCamera.shipPosition.z);
+      this.flyCamera.groundY = sy;
+      // Gentle clamp — the setGrounded clamp in ShipController handles the rest.
+    } else {
+      // On foot — drive the character.
+      this.character.update(dt, {
+        gravity: this.gravity,
+        groundHeight: (x, z) => sampleTerrainHeight(p, x, z),
+      });
     }
-    // Clouds drift
-    if (this.cloudMesh) {
-      this.cloudMesh.rotation.y += dt * 0.008;
-    }
+
+    if (this.cloudMesh) this.cloudMesh.rotation.y += dt * 0.008;
   }
 
   dispose() {
-    if (this.escListener) window.removeEventListener('keydown', this.escListener);
-    // Clear fog so it doesn't bleed into space scenes
-    // (SceneManager doesn't touch THREE.Scene.fog)
-    // The next scene's build() will set or clear it.
+    if (this.escListener)  window.removeEventListener('keydown', this.escListener);
+    if (this.fKeyListener) window.removeEventListener('keydown', this.fKeyListener);
+    // Release ship from grounded state so it flies normally in space again.
+    this.flyCamera.setGrounded(false);
+    this.flyCamera.setControlsEnabled(true);
+    this.character.setActive(false);
   }
 }
 
