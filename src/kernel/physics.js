@@ -91,3 +91,24 @@ export function starColorFromLifetime(lifetimeRatio) {
   const t = (heat - 0.75) / 0.25;
   return { r: 0.85 - t * 0.25, g: 0.85 - t * 0.15, b: 1 };
 }
+
+// Density (game units) per biome. Tuned so vanilla temperate r≈3 → g≈20.
+// Not SI kg/m³ — absorbs (4/3)π and a unit-scale constant so values
+// stay small and the physics formula reads cleanly.
+export const BIOME_DENSITY = Object.freeze({
+  molten:    6.7,
+  desert:    5.2,
+  temperate: 6.7,
+  ocean:     5.0,
+  gas_giant: 1.8,
+  ice:       2.2,
+});
+
+// Surface gravity for a planet in this universe.
+//   g = G * ρ * r   (simplified from GM/r² with M ∝ ρr³)
+// Output units: game-units per second squared. At vanilla G=1,
+// temperate r=3 yields ~20. Tune via BIOME_DENSITY.
+export function surfaceGravity(universe, planet) {
+  const rho = BIOME_DENSITY[planet.biome] ?? BIOME_DENSITY.temperate;
+  return universe.constants.G * rho * planet.radius;
+}

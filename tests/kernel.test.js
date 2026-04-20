@@ -7,6 +7,7 @@ import {
   branchUniverse,
   derivePlanet,
   sampleTerrainHeight,
+  surfaceGravity,
   VANILLA_CONSTANTS,
   BIOMES,
 } from '../src/kernel/index.js';
@@ -96,5 +97,42 @@ describe('kernel · planets and terrain', () => {
     expect(h1).toBe(h2);
     // sanity bounds
     expect(Math.abs(h1)).toBeLessThan(200);
+  });
+});
+
+describe('kernel · surface gravity', () => {
+  it('surfaceGravity is within a playable range for a vanilla temperate planet', () => {
+    const u = generateUniverse(VANILLA_CONSTANTS);
+    const planet = { biome: BIOMES.TEMPERATE, radius: 3 };
+    const g = surfaceGravity(u, planet);
+    expect(g).toBeGreaterThan(10);
+    expect(g).toBeLessThan(40);
+  });
+
+  it('surfaceGravity scales linearly with G', () => {
+    const planet = { biome: BIOMES.TEMPERATE, radius: 3 };
+    const u1 = generateUniverse({ ...VANILLA_CONSTANTS, G: 1 });
+    const u2 = generateUniverse({ ...VANILLA_CONSTANTS, G: 2 });
+    expect(surfaceGravity(u2, planet)).toBeCloseTo(surfaceGravity(u1, planet) * 2, 5);
+  });
+
+  it('surfaceGravity scales linearly with planet radius', () => {
+    const u = generateUniverse(VANILLA_CONSTANTS);
+    const small = { biome: BIOMES.TEMPERATE, radius: 2 };
+    const big   = { biome: BIOMES.TEMPERATE, radius: 4 };
+    expect(surfaceGravity(u, big)).toBeCloseTo(surfaceGravity(u, small) * 2, 5);
+  });
+
+  it('gas giant has lower gravity than temperate at equal radius', () => {
+    const u = generateUniverse(VANILLA_CONSTANTS);
+    const gg = { biome: BIOMES.GAS_GIANT, radius: 3 };
+    const tp = { biome: BIOMES.TEMPERATE, radius: 3 };
+    expect(surfaceGravity(u, gg)).toBeLessThan(surfaceGravity(u, tp));
+  });
+
+  it('surfaceGravity is deterministic', () => {
+    const u = generateUniverse(VANILLA_CONSTANTS);
+    const planet = derivePlanet(u, 2);
+    expect(surfaceGravity(u, planet)).toBe(surfaceGravity(u, planet));
   });
 });
