@@ -47,6 +47,13 @@ export class ShipController {
 
     // View
     this.viewMode = 'cockpit'; // 'cockpit' | 'external'
+
+    // Surface state — set by PlanetSurfaceScene when grounded.
+    this.grounded = false;
+    this.groundClearance = 2.5; // ship sits this far above the ground
+    this.groundY = 0;
+    this.controlsEnabled = true;
+
     this.scaleFactor = 1;
 
     // Input
@@ -130,6 +137,21 @@ export class ShipController {
     }
   }
 
+  setGrounded(flag, groundY = 0) {
+    this.grounded = flag;
+    this.groundY = groundY;
+    if (flag) {
+      this.shipPosition.y = groundY + this.groundClearance;
+      this.velocity.set(0, 0, 0);
+      this.throttle = 0;
+    }
+  }
+
+  setControlsEnabled(flag) {
+    this.controlsEnabled = flag;
+    if (!flag) this.keys = {};
+  }
+
   update(dt) {
     // ── Camera orientation (mouse-driven) ───────────────────────────
     const qCamera = new THREE.Quaternion().setFromEuler(
@@ -141,24 +163,33 @@ export class ShipController {
     const right   = new THREE.Vector3(1, 0, 0).applyQuaternion(qCamera);
     const worldUp = new THREE.Vector3(0, 1, 0);
 
-    const boost = (this.keys['ShiftLeft'] || this.keys['ShiftRight']) ? 1 : 0;
-    const wantForward = this.keys['KeyW'] ? 1 : (this.keys['KeyS'] ? -0.6 : 0);
-    const throttleTarget = Math.abs(wantForward) * (1 + boost * 1.5);
+    let boost = 0;
+    let wantForward = 0;
+    let throttleTarget = 0;
+    if (this.controlsEnabled) {
+      boost = (this.keys['ShiftLeft'] || this.keys['ShiftRight']) ? 1 : 0;
+      wantForward = this.keys['KeyW'] ? 1 : (this.keys['KeyS'] ? -0.6 : 0);
+      throttleTarget = Math.abs(wantForward) * (1 + boost * 1.5);
+    }
     this.throttle += (throttleTarget - this.throttle) * Math.min(1, dt * 2.5);
 
     const effectiveAccel = this.accel * this.scaleFactor * (1 + boost * 2.5);
 
-    if (wantForward !== 0) {
-      this.velocity.addScaledVector(
-        forward,
-        Math.sign(wantForward) * this.throttle * effectiveAccel * dt
-      );
-    }
-    if (this.keys['KeyA']) this.velocity.addScaledVector(right, -effectiveAccel * 0.5 * dt);
-    if (this.keys['KeyD']) this.velocity.addScaledVector(right,  effectiveAccel * 0.5 * dt);
-    if (this.keys['Space']) this.velocity.addScaledVector(worldUp,  effectiveAccel * 0.5 * dt);
-    if (this.keys['ControlLeft'] || this.keys['ControlRight']) {
-      this.velocity.addScaledVector(worldUp, -effectiveAccel * 0.5 * dt);
+    if (this.controlsEnabled) {
+      if (wantForward !== 0) {
+        this.velocity.addScaledVector(
+          forward,
+          Math.sign(wantForward) * this.throttle * effectiveAccel * dt
+        );
+      }
+      if (this.keys['KeyA']) this.velocity.addScaledVector(right, -effectiveAccel * 0.5 * dt);
+      if (this.keys['KeyD']) this.velocity.addScaledVector(right,  effectiveAccel * 0.5 * dt);
+      if (!this.grounded) {
+        if (this.keys['Space']) this.velocity.addScaledVector(worldUp,  effectiveAccel * 0.5 * dt);
+        if (this.keys['ControlLeft'] || this.keys['ControlRight']) {
+          this.velocity.addScaledVector(worldUp, -effectiveAccel * 0.5 * dt);
+        }
+      }
     }
 
     const maxV = this.maxSpeed * this.scaleFactor * (1 + boost * 2);
@@ -167,6 +198,14 @@ export class ShipController {
 
     // Integrate ship position
     this.shipPosition.addScaledVector(this.velocity, dt);
+
+    if (this.grounded) {
+      const minY = this.groundY + this.groundClearance;
+      if (this.shipPosition.y < minY) {
+        this.shipPosition.y = minY;
+        if (this.velocity.y < 0) this.velocity.y = 0;
+      }
+    }
 
     // ── Ship heading lerps toward camera view ──────────────────────
     // So the ship visibly turns to match where you're thrusting, but
