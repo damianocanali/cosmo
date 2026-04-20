@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Cosmogony</title>
+  <link rel="stylesheet" href="/src/ui/styles.css" />
+</head>
+<body>
+  <canvas id="canvas"></canvas>
+  <div id="loading"><div class="text">Initializing cosmos…</div></div>
+
+  <div class="hud" id="identity">
+    <div class="label">Now Observing</div>
+    <div class="name" id="universeName">Vanilla</div>
+    <div class="seed" id="universeSeed">scene · solar system</div>
+  </div>
+
+  <div class="hud" id="telemetry">
+    <div class="row"><span class="key">X</span><span class="val" id="posX">0</span></div>
+    <div class="row"><span class="key">Y</span><span class="val" id="posY">0</span></div>
+    <div class="row"><span class="key">Z</span><span class="val" id="posZ">0</span></div>
+    <div class="row"><span class="key">V</span><span class="val" id="velocity">0.0</span></div>
+  </div>
+
+  <div id="target" class="hud">
+    <div id="targetBox"></div>
+    <div class="below">
+      <div class="name" id="targetName">—</div>
+      <div class="dist" id="targetDist">— units</div>
+      <div class="hint" id="targetHint"></div>
+    </div>
+  </div>
+
+  <div class="hud" id="physics">
+    <div class="heading">Local Physics</div>
+    <div class="row"><span class="key">Min star</span><span class="val" id="phMin">—</span></div>
+    <div class="row"><span class="key">Max star</span><span class="val" id="phMax">—</span></div>
+    <div class="row"><span class="key">Sun lifetime</span><span class="val" id="phLife">—</span></div>
+    <div class="row"><span class="key">Density</span><span class="val" id="phDens">—</span></div>
+    <div class="row"><span class="key">Typical star</span><span class="val" id="phType">—</span></div>
+  </div>
+
+  <div class="hud" id="controls">
+    <div><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> Move</div>
+    <div><kbd>Space</kbd><kbd>Ctrl</kbd> Up/Down</div>
+    <div>Mouse drag · Look</div>
+    <div><kbd>Shift</kbd> Boost · <kbd>Tab</kbd> Panel</div>
+    <div><kbd>L</kbd> Land · <kbd>Esc</kbd> Leave Surface</div>
+  </div>
+
+  <div id="panel">
+    <div class="title">Cosmogony</div>
+    <div class="subtitle">Reshape · Witness</div>
+
+    <div id="scenes">
+      <button class="scene-btn active" data-scene="solar">Solar System</button>
+      <button class="scene-btn" data-scene="galaxy">Galaxy</button>
+      <button class="scene-btn" data-scene="blackhole">Black Hole</button>
+    </div>
+
+    <div class="ctrl" data-key="G">
+      <div class="ctrl-head"><span class="ctrl-label"><span class="sym">G</span>Gravity</span><span class="ctrl-val">1.00</span></div>
+      <input type="range" min="0.1" max="10" step="0.05" value="1" />
+    </div>
+    <div class="ctrl" data-key="S">
+      <div class="ctrl-head"><span class="ctrl-label"><span class="sym">α𝒮</span>Strong force</span><span class="ctrl-val">1.00</span></div>
+      <input type="range" min="0.5" max="2" step="0.01" value="1" />
+    </div>
+    <div class="ctrl" data-key="Lambda">
+      <div class="ctrl-head"><span class="ctrl-label"><span class="sym">Λ</span>Cosmological Λ</span><span class="ctrl-val">1.00</span></div>
+      <input type="range" min="0" max="5" step="0.05" value="1" />
+    </div>
+    <div class="ctrl" data-key="cLight">
+      <div class="ctrl-head"><span class="ctrl-label"><span class="sym">c</span>Speed of light</span><span class="ctrl-val">1.00</span></div>
+      <input type="range" min="0.1" max="10" step="0.05" value="1" />
+    </div>
+    <div class="ctrl" data-key="rho">
+      <div class="ctrl-head"><span class="ctrl-label"><span class="sym">ρ₀</span>Matter density</span><span class="ctrl-val">1.00</span></div>
+      <input type="range" min="0.1" max="10" step="0.05" value="1" />
+    </div>
+    <div class="ctrl" data-key="dm">
+      <div class="ctrl-head"><span class="ctrl-label"><span class="sym">Ω𝒹</span>Dark matter</span><span class="ctrl-val">0.27</span></div>
+      <input type="range" min="0" max="0.95" step="0.01" value="0.27" />
+    </div>
+
+    <div id="presetRow">
+      <button class="preset-btn" data-preset="vanilla">Vanilla</button>
+      <button class="preset-btn" data-preset="heavy">Heavy</button>
+      <button class="preset-btn" data-preset="sparse">Sparse</button>
+      <button class="preset-btn" data-preset="diffuse">Diffuse</button>
+      <button class="preset-btn" data-preset="primal">Primal</button>
+    </div>
+  </div>
+
+  <button id="panelToggle">⟩</button>
+
+  <div id="sterile">
+    <div class="msg">
+      <div class="big">⊘ Sterile Cosmos</div>
+      <div class="small" id="sterileReason">Nothing forms here.</div>
+    </div>
+  </div>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>

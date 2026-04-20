@@ -1,0 +1,99 @@
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;1,400;1,500&family=JetBrains+Mono:wght@300;400;600&display=swap');
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { width: 100%; height: 100%; overflow: hidden; background: #000; }
+body { font-family: 'Cormorant Garamond', Georgia, serif; color: #e8dfc8; }
+
+#canvas { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; cursor: crosshair; }
+
+.hud {
+  position: fixed;
+  pointer-events: none;
+  color: #c8b890;
+  font-family: 'JetBrains Mono', monospace;
+  text-shadow: 0 0 8px rgba(0,0,0,0.9);
+  z-index: 10;
+}
+
+#identity { top: 24px; left: 24px; font-size: 11px; letter-spacing: 0.2em; text-transform: uppercase; line-height: 1.8; }
+#identity .label { color: #6b5d4a; }
+#identity .name { color: #e8dfc8; font-size: 13px; letter-spacing: 0.15em; }
+#identity .seed { color: #8b6f4a; font-size: 9px; margin-top: 6px; }
+
+#telemetry { top: 24px; right: 24px; font-size: 11px; letter-spacing: 0.15em; text-align: right; line-height: 1.8; }
+#telemetry .row { display: flex; justify-content: flex-end; gap: 12px; }
+#telemetry .key { color: #6b5d4a; }
+#telemetry .val { color: #e8dfc8; font-variant-numeric: tabular-nums; min-width: 80px; text-align: right; }
+
+#target {
+  position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  pointer-events: none; z-index: 11;
+  font-family: 'JetBrains Mono', monospace;
+  color: #c8b890; font-size: 10px; letter-spacing: 0.2em; text-transform: uppercase;
+  text-shadow: 0 0 8px rgba(0,0,0,0.9);
+  text-align: center; opacity: 0; transition: opacity 0.3s;
+}
+#target.show { opacity: 1; }
+#target .name { font-size: 14px; letter-spacing: 0.15em; margin-bottom: 4px; }
+#target .dist { color: #6b5d4a; font-size: 9px; }
+#target .hint { color: #c8b890; font-size: 9px; margin-top: 4px; letter-spacing: 0.2em; opacity: 0.85; }
+#targetBox {
+  position: absolute; left: 50%; top: -8px; transform: translateX(-50%);
+  width: 60px; height: 60px;
+  border: 1px solid rgba(200, 184, 144, 0.5);
+}
+#target .below { margin-top: 70px; }
+
+#physics { bottom: 24px; left: 24px; font-size: 10px; letter-spacing: 0.12em; line-height: 1.9; max-width: 280px; }
+#physics .heading { font-family: 'Cormorant Garamond', serif; font-style: italic; font-size: 13px; color: #c8b890; letter-spacing: 0.05em; margin-bottom: 8px; border-bottom: 1px solid rgba(200, 184, 144, 0.2); padding-bottom: 4px; }
+#physics .row { display: flex; justify-content: space-between; gap: 12px; }
+#physics .key { color: #6b5d4a; text-transform: uppercase; }
+#physics .val { color: #e8dfc8; font-variant-numeric: tabular-nums; }
+
+#controls { bottom: 24px; right: 24px; font-size: 9px; letter-spacing: 0.2em; text-align: right; line-height: 2; color: #6b5d4a; text-transform: uppercase; }
+#controls kbd { font-family: 'JetBrains Mono', monospace; color: #c8b890; border: 1px solid #3a3024; padding: 2px 6px; margin: 0 2px; font-size: 9px; }
+
+#panel {
+  position: fixed; top: 50%; left: 24px; transform: translateY(-50%);
+  width: 280px;
+  background: rgba(10, 8, 6, 0.85); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(200, 184, 144, 0.15);
+  padding: 24px 22px; pointer-events: auto; z-index: 20;
+  transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.4s; opacity: 1;
+  max-height: 90vh; overflow-y: auto;
+}
+#panel.hidden { transform: translate(calc(-100% - 24px), -50%); opacity: 0; }
+#panel::-webkit-scrollbar { width: 4px; }
+#panel::-webkit-scrollbar-thumb { background: #3a3024; }
+
+#panel .title { font-family: 'Cormorant Garamond', serif; font-style: italic; font-size: 18px; color: #e8dfc8; margin-bottom: 4px; }
+#panel .subtitle { font-family: 'JetBrains Mono', monospace; font-size: 9px; letter-spacing: 0.2em; text-transform: uppercase; color: #6b5d4a; margin-bottom: 20px; }
+
+.ctrl { margin-bottom: 14px; }
+.ctrl-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 4px; }
+.ctrl-label { font-family: 'Cormorant Garamond', serif; font-size: 13px; color: #c8b890; }
+.ctrl-label .sym { font-style: italic; color: #8b6f4a; margin-right: 6px; }
+.ctrl-val { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #e8dfc8; font-variant-numeric: tabular-nums; }
+.ctrl input[type=range] { width: 100%; accent-color: #c8b890; cursor: pointer; }
+
+#scenes { display: flex; gap: 6px; margin-bottom: 18px; padding-bottom: 16px; border-bottom: 1px solid rgba(200, 184, 144, 0.15); flex-wrap: wrap; }
+.scene-btn { flex: 1; min-width: 70px; font-family: 'JetBrains Mono', monospace; font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; background: transparent; color: #c8b890; border: 1px solid #3a3024; padding: 8px 6px; cursor: pointer; transition: all 0.15s; }
+.scene-btn:hover { border-color: #c8b890; }
+.scene-btn.active { background: #c8b890; color: #1a1612; border-color: #c8b890; }
+
+#presetRow { margin-top: 18px; padding-top: 16px; border-top: 1px solid rgba(200, 184, 144, 0.15); display: flex; flex-wrap: wrap; gap: 6px; }
+.preset-btn { font-family: 'JetBrains Mono', monospace; font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; background: transparent; color: #c8b890; border: 1px solid #3a3024; padding: 6px 10px; cursor: pointer; transition: all 0.15s; }
+.preset-btn:hover { border-color: #c8b890; background: rgba(200,184,144,0.08); }
+
+#panelToggle { position: fixed; top: 50%; left: 24px; transform: translateY(-50%); background: rgba(10, 8, 6, 0.85); border: 1px solid rgba(200, 184, 144, 0.15); color: #c8b890; width: 36px; height: 60px; cursor: pointer; font-family: 'JetBrains Mono', monospace; font-size: 14px; pointer-events: auto; opacity: 0; transition: opacity 0.4s; z-index: 19; }
+#panel.hidden ~ #panelToggle { opacity: 1; }
+
+#sterile { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(0,0,0,0.6); pointer-events: none; z-index: 30; }
+#sterile.show { display: flex; }
+#sterile .msg { text-align: center; font-family: 'Cormorant Garamond', serif; font-style: italic; color: #8b6f4a; }
+#sterile .msg .big { font-size: 32px; margin-bottom: 8px; color: #c8b890; }
+#sterile .msg .small { font-size: 14px; }
+
+#loading { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: #000; z-index: 100; transition: opacity 0.6s; }
+#loading.hide { opacity: 0; pointer-events: none; }
+#loading .text { font-family: 'Cormorant Garamond', serif; font-style: italic; color: #8b6f4a; font-size: 14px; letter-spacing: 0.2em; text-transform: uppercase; }
