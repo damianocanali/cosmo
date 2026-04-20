@@ -141,24 +141,45 @@ export class SolarSystemScene {
   }
 
   tryLand() {
-    // Find planet under crosshair OR closest planet within range
-    const target = this.mgr.findCrosshairTarget(this.camera);
-    let chosen = null;
-    if (target && target.object.userData.planetData) {
-      chosen = target.object.userData.planetData;
-    } else {
-      // Fallback: closest planet within reasonable distance
-      let bestDist = Infinity;
-      for (const p of this.planets) {
-        const d = this.camera.position.distanceTo(p.mesh.position);
-        if (d < bestDist && d < p.planetData.radius * 20) {
-          bestDist = d;
-          chosen = p.planetData;
-        }
-      }
+    // Landing corridor: center distance between planet.radius + 1 and + 20.
+    // Outside that band, flash a hint.
+    const hud = document.getElementById('target');
+    const hint = document.getElementById('targetHint');
+    const flash = (msg) => {
+      if (!hud || !hint) return;
+      hint.textContent = msg;
+      hud.classList.add('show');
+      clearTimeout(this._flashT);
+      this._flashT = setTimeout(() => { hint.textContent = ''; }, 900);
+    };
+
+    // Find the closest planet first.
+    let best = null;
+    let bestDist = Infinity;
+    for (const p of this.planets) {
+      const d = this.camera.position.distanceTo(p.mesh.position);
+      if (d < bestDist) { bestDist = d; best = p; }
     }
-    if (chosen && this.onLandRequest) {
-      this.onLandRequest(chosen, this.starColor);
+    if (!best) return;
+
+    const r = best.planetData.radius;
+    const surfaceDist = bestDist - r;
+
+    if (best.planetData.biome === 'gas_giant') {
+      flash('atmosphere too deep — cannot land');
+      return;
+    }
+    if (surfaceDist > 20) {
+      flash('too far — approach the planet');
+      return;
+    }
+    if (surfaceDist < 1) {
+      flash('too close — pull up');
+      return;
+    }
+
+    if (this.onLandRequest) {
+      this.onLandRequest(best.planetData, this.starColor);
     }
   }
 
