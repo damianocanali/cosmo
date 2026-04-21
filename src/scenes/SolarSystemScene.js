@@ -8,6 +8,13 @@ import {
 } from '../kernel/index.js';
 import { getGlowTexture } from '../engine/renderer.js';
 
+// Visual scale multipliers — kernel radii stay pure (used for gravity,
+// determinism). Renderer blows them up so planets read as massive bodies
+// instead of pebbles. Keep PLANET_SCALE and ORBIT_SCALE in lock-step so
+// the system fits the same camera framing.
+const PLANET_SCALE = 3;
+const ORBIT_SCALE = 3;
+
 export class SolarSystemScene {
   constructor({ universe, camera, flyCamera, onLandRequest }) {
     this.universe = universe;
@@ -54,18 +61,23 @@ export class SolarSystemScene {
     star.add(light);
     mgr.threeScene.add(mgr.track(new THREE.AmbientLight(0x202028, 0.3)));
 
-    // Planets — derived from kernel
+    // Planets — derived from kernel. Display radius is the kernel radius
+    // blown up by PLANET_SCALE; orbit radii scale in lock-step. Store both
+    // on the tracked record so landing/radar/orbit logic uses the display
+    // values consistently.
     const N = planetCount(u, rng);
     for (let i = 0; i < N; i++) {
       const pData = derivePlanet(u, i);
-      const mesh = this.makePlanetMesh(pData);
+      const displayR = pData.radius * PLANET_SCALE;
+      const displayOrbit = pData.orbitRadius * ORBIT_SCALE;
+      const mesh = this.makePlanetMesh(pData, displayR);
       mesh.position.set(
-        Math.cos(pData.initialAngle) * pData.orbitRadius,
-        (rng() - 0.5) * 2,
-        Math.sin(pData.initialAngle) * pData.orbitRadius
+        Math.cos(pData.initialAngle) * displayOrbit,
+        (rng() - 0.5) * 2 * PLANET_SCALE,
+        Math.sin(pData.initialAngle) * displayOrbit
       );
 
-      if (pData.hasMoon) this.attachMoon(mesh, pData);
+      if (pData.hasMoon) this.attachMoon(mesh, displayR);
 
       mgr.threeScene.add(mgr.track(
         mesh,
@@ -73,13 +85,17 @@ export class SolarSystemScene {
         'press L to land'
       ));
       mesh.userData.planetData = pData;
+      mesh.userData.displayRadius = displayR;
 
       const orbitSpeed = Math.sqrt(u.constants.G / Math.pow(pData.orbitRadius, 1.5)) * 0.5;
-      this.planets.push({ mesh, planetData: pData, orbitSpeed, angle: pData.initialAngle });
+      this.planets.push({
+        mesh, planetData: pData, orbitSpeed, angle: pData.initialAngle,
+        displayRadius: displayR, displayOrbit,
+      });
 
       // Faint orbit ring
       const orbit = new THREE.Mesh(
-        new THREE.RingGeometry(pData.orbitRadius - 0.1, pData.orbitRadius + 0.1, 128),
+        new THREE.RingGeometry(displayOrbit - 0.2, displayOrbit + 0.2, 160),
         new THREE.MeshBasicMaterial({
           color: 0x3a3024, side: THREE.DoubleSide, transparent: true, opacity: 0.3,
         })
@@ -94,13 +110,13 @@ export class SolarSystemScene {
     };
     window.addEventListener('keydown', this.landListener);
 
-    // Position camera
-    this.camera.position.set(0, 30, 100);
+    // Position camera — pulled back to match the new system scale.
+    this.camera.position.set(0, 90, 300);
     this.flyCamera.syncFromCameraPosition(new THREE.Vector3(0, 0, 0));
     this.flyCamera.setScale(1);
   }
 
-  makePlanetMesh(pData) {
+  makePlanetMesh(pData, displayR) {
     const colorMap = {
       molten:    new THREE.Color().setHSL(0.04, 0.7, 0.35),
       desert:    new THREE.Color().setHSL(0.08, 0.5, 0.5),
@@ -114,11 +130,11 @@ export class SolarSystemScene {
       roughness: 0.85,
       metalness: 0.05,
     });
-    const mesh = new THREE.Mesh(new THREE.SphereGeometry(pData.radius, 32, 32), mat);
+    const mesh = new THREE.Mesh(new THREE.SphereGeometry(displayR, 48, 48), mat);
 
     if (pData.hasRings) {
       const ring = new THREE.Mesh(
-        new THREE.RingGeometry(pData.radius * 1.4, pData.radius * 2.2, 64),
+        new THREE.RingGeometry(displayR * 1.4, displayR * 2.2, 96),
         new THREE.MeshBasicMaterial({
           color: 0xc8b890, side: THREE.DoubleSide, transparent: true, opacity: 0.4,
         })
@@ -129,13 +145,14 @@ export class SolarSystemScene {
     return mesh;
   }
 
-  attachMoon(planetMesh, pData) {
+  attachMoon(planetMesh, displayR) {
     const moon = new THREE.Mesh(
-      new THREE.SphereGeometry(pData.radius * 0.3, 16, 16),
+      new THREE.SphereGeometry(displayR * 0.3, 24, 24),
       new THREE.MeshStandardMaterial({ color: 0xaaa090, roughness: 0.95 })
     );
-    moon.position.set(pData.radius * 3, 0, 0);
+    moon.position.set(displayR * 3, 0, 0);
     moon.userData.orbitSpeed = 1.5 + Math.random();
+    moon.userData.orbitRadius = displayR * 3;
     planetMesh.add(moon);
     planetMesh.userData.moon = moon;
   }
@@ -162,18 +179,19 @@ export class SolarSystemScene {
     }
     if (!best) return;
 
-    const r = best.planetData.radius;
+    const r = best.displayRadius;
     const surfaceDist = bestDist - r;
 
     if (best.planetData.biome === 'gas_giant') {
       flash('atmosphere too deep — cannot land');
       return;
     }
-    if (surfaceDist > 20) {
+    // Corridor scales with planet size so big and small planets feel the same.
+    if (surfaceDist > r * 1.5) {
       flash('too far — approach the planet');
       return;
     }
-    if (surfaceDist < 1) {
+    if (surfaceDist < r * 0.1) {
       flash('too close — pull up');
       return;
     }
@@ -184,18 +202,30 @@ export class SolarSystemScene {
   }
 
   update(dt, t) {
+    let nearestSurfaceDist = Infinity;
     for (const p of this.planets) {
       p.angle += p.orbitSpeed * dt;
-      p.mesh.position.x = Math.cos(p.angle) * p.planetData.orbitRadius;
-      p.mesh.position.z = Math.sin(p.angle) * p.planetData.orbitRadius;
+      p.mesh.position.x = Math.cos(p.angle) * p.displayOrbit;
+      p.mesh.position.z = Math.sin(p.angle) * p.displayOrbit;
       p.mesh.rotation.y += dt * p.planetData.rotationPeriod;
       const moon = p.mesh.userData.moon;
       if (moon) {
         const ma = t * moon.userData.orbitSpeed;
-        const mr = p.planetData.radius * 3;
+        const mr = moon.userData.orbitRadius;
         moon.position.x = Math.cos(ma) * mr;
         moon.position.z = Math.sin(ma) * mr;
       }
+      const d = this.camera.position.distanceTo(p.mesh.position) - p.displayRadius;
+      if (d < nearestSurfaceDist) nearestSurfaceDist = d;
+    }
+
+    // Proximity slowdown: ramps up as the ship approaches a planet so it
+    // doesn't fly past at boost speed. Influence zone scales with planet size
+    // (well-of-influence ~= 4 planet radii), capping at 4× drag at the surface.
+    if (this.flyCamera?.setProximitySlowdown) {
+      const refRange = 60; // units — distance at which slowdown starts
+      const t01 = Math.max(0, 1 - nearestSurfaceDist / refRange);
+      this.flyCamera.setProximitySlowdown(1 + t01 * 3);
     }
   }
 
@@ -213,6 +243,10 @@ export class SolarSystemScene {
   dispose() {
     if (this.landListener) {
       window.removeEventListener('keydown', this.landListener);
+    }
+    // Don't bleed gravity-well drag into the next scene (galaxy/blackhole).
+    if (this.flyCamera?.setProximitySlowdown) {
+      this.flyCamera.setProximitySlowdown(1);
     }
   }
 }

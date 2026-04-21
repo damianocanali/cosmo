@@ -54,6 +54,12 @@ export class ShipController {
     this.groundY = 0;
     this.controlsEnabled = true;
 
+    // Drag multiplier driven by SolarSystemScene when close to a planet, so
+    // the ship "feels" gravity wells and is easier to settle into orbit / land.
+    // 1.0 = normal coast, higher = more aggressive damping. Applied as
+    // velocity *= drag^proximitySlowdown each frame.
+    this.proximitySlowdown = 1.0;
+
     this.scaleFactor = 1;
 
     // Input
@@ -160,6 +166,10 @@ export class ShipController {
     if (!flag) this.keys = {};
   }
 
+  setProximitySlowdown(factor) {
+    this.proximitySlowdown = Math.max(1, factor);
+  }
+
   update(dt) {
     // ── Camera orientation (mouse-driven) ───────────────────────────
     const qCamera = new THREE.Quaternion().setFromEuler(
@@ -174,9 +184,11 @@ export class ShipController {
     let boost = 0;
     let wantForward = 0;
     let throttleTarget = 0;
+    let braking = false;
     if (this.controlsEnabled) {
       boost = (this.keys['ShiftLeft'] || this.keys['ShiftRight']) ? 1 : 0;
-      wantForward = this.keys['KeyW'] ? 1 : (this.keys['KeyS'] ? -0.6 : 0);
+      wantForward = this.keys['KeyW'] ? 1 : 0;
+      braking = !!this.keys['KeyS']; // S is a decisive brake, not reverse thrust
       throttleTarget = Math.abs(wantForward) * (1 + boost * 1.5);
     }
     this.throttle += (throttleTarget - this.throttle) * Math.min(1, dt * 2.5);
@@ -202,7 +214,19 @@ export class ShipController {
 
     const maxV = this.maxSpeed * this.scaleFactor * (1 + boost * 2);
     if (this.velocity.length() > maxV) this.velocity.setLength(maxV);
-    this.velocity.multiplyScalar(this.drag);
+
+    // Drag is amplified near planets via proximitySlowdown — gives the ship
+    // a sense that it's pushing against gravity when approaching.
+    this.velocity.multiplyScalar(Math.pow(this.drag, this.proximitySlowdown));
+
+    // Hard brake — S kills velocity decisively (drops to ~2% in ~1 second).
+    // Frame-rate-aware via Math.pow(rate, dt). Also bleeds throttle so the
+    // engines visibly stop pulling.
+    if (braking) {
+      const brakeDecay = Math.pow(0.02, dt);
+      this.velocity.multiplyScalar(brakeDecay);
+      this.throttle *= brakeDecay;
+    }
 
     // Integrate ship position
     this.shipPosition.addScaledVector(this.velocity, dt);
