@@ -110,8 +110,10 @@ export class SolarSystemScene {
     };
     window.addEventListener('keydown', this.landListener);
 
-    // Position camera — pulled back to match the new system scale.
-    this.camera.position.set(0, 90, 300);
+    // Position camera — pulled back only ~1.5× of original despite the 3×
+    // planet scale, so planets visually dominate the frame instead of just
+    // filling the same proportion as before.
+    this.camera.position.set(0, 45, 150);
     this.flyCamera.syncFromCameraPosition(new THREE.Vector3(0, 0, 0));
     this.flyCamera.setScale(1);
   }
