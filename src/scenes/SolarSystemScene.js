@@ -57,9 +57,29 @@ export class SolarSystemScene {
     glow.scale.set(starRadius * 8, starRadius * 8, 1);
     star.add(glow);
 
-    const light = new THREE.PointLight(starColor, 2, 0, 0);
+    // Key light — the star itself. Boosted to 10 because ACES expects
+    // physically-higher light levels; the old intensity 2 reads as flat under
+    // the new tonemapping. Casts shadows onto planets and moons.
+    const light = new THREE.PointLight(starColor, 10, 0, 0);
+    light.castShadow = true;
+    light.shadow.mapSize.set(2048, 2048);
+    light.shadow.camera.near = 1;
+    light.shadow.camera.far = 4000;
+    light.shadow.bias = -0.0005;
     star.add(light);
-    mgr.threeScene.add(mgr.track(new THREE.AmbientLight(0x202028, 0.3)));
+
+    // Hemispheric fill — replaces the old AmbientLight. Sky color picks up
+    // a cool tint of the star color, ground color is a warm rust. Keeps the
+    // shadow side of planets visible without looking flat-ambient-lit.
+    const skyHex = new THREE.Color(starColor).lerp(new THREE.Color(0x4a5878), 0.5).getHex();
+    const fill = new THREE.HemisphereLight(skyHex, 0x2a1810, 0.25);
+    mgr.threeScene.add(mgr.track(fill));
+
+    // Rim light — a dim directional from the side opposite the star, so
+    // planet/ship silhouettes get a cool edge highlight even in shadow.
+    const rim = new THREE.DirectionalLight(0xe0f0ff, 0.3);
+    rim.position.set(-100, 40, -100);
+    mgr.threeScene.add(mgr.track(rim));
 
     // Planets — derived from kernel. Display radius is the kernel radius
     // blown up by PLANET_SCALE; orbit radii scale in lock-step. Store both
@@ -133,6 +153,8 @@ export class SolarSystemScene {
       metalness: 0.05,
     });
     const mesh = new THREE.Mesh(new THREE.SphereGeometry(displayR, 48, 48), mat);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
 
     if (pData.hasRings) {
       const ring = new THREE.Mesh(
@@ -152,6 +174,8 @@ export class SolarSystemScene {
       new THREE.SphereGeometry(displayR * 0.3, 24, 24),
       new THREE.MeshStandardMaterial({ color: 0xaaa090, roughness: 0.95 })
     );
+    moon.castShadow = true;
+    moon.receiveShadow = true;
     moon.position.set(displayR * 3, 0, 0);
     moon.userData.orbitSpeed = 1.5 + Math.random();
     moon.userData.orbitRadius = displayR * 3;
