@@ -47,14 +47,17 @@ export class PlanetSurfaceScene {
     const atmoVec = new THREE.Color(atmoColor[0], atmoColor[1], atmoColor[2]);
 
     // ── Lighting ───────────────────────────────────────────────────
+    // Intensities tuned for ACES tonemapping (set on the renderer). Same
+    // ratios as before, ~2.5× the magnitudes; without the boost the surface
+    // reads dim against the bloom-accented space scene.
     const sunDir = new THREE.Vector3(0.5, 0.6, 0.3).normalize();
-    const sun = new THREE.DirectionalLight(this.starColor, 1.6);
+    const sun = new THREE.DirectionalLight(this.starColor, 4.0);
     sun.position.copy(sunDir).multiplyScalar(2500);
     mgr.threeScene.add(mgr.track(sun));
 
     const ambient = new THREE.AmbientLight(
       atmoVec.clone().multiplyScalar(0.4),
-      0.7
+      1.5
     );
     mgr.threeScene.add(mgr.track(ambient));
 
@@ -62,7 +65,7 @@ export class PlanetSurfaceScene {
     const hemi = new THREE.HemisphereLight(
       atmoVec.getHex(),
       0x3a2f24,
-      0.4
+      0.9
     );
     mgr.threeScene.add(mgr.track(hemi));
 
@@ -133,7 +136,7 @@ export class PlanetSurfaceScene {
       );
       lava.position.y = seaLevel - 2;
       mgr.threeScene.add(mgr.track(lava));
-      const hellAmbient = new THREE.AmbientLight(0xff2000, 0.5);
+      const hellAmbient = new THREE.AmbientLight(0xff2000, 1.1);
       mgr.threeScene.add(mgr.track(hellAmbient));
     }
 
