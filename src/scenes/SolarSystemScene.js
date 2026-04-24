@@ -7,6 +7,7 @@ import {
   starColorFromLifetime,
 } from '../kernel/index.js';
 import { getGlowTexture } from '../engine/renderer.js';
+import { buildAtmosphere, atmosphereTintForBiome } from '../engine/atmosphereShader.js';
 
 // Visual scale multipliers — kernel radii stay pure (used for gravity,
 // determinism). Renderer blows them up so planets read as massive bodies
@@ -165,6 +166,10 @@ export class SolarSystemScene {
       );
       ring.rotation.x = Math.PI / 2 + (Math.random() - 0.5) * 0.4;
       mesh.add(ring);
+    }
+    const tint = atmosphereTintForBiome(pData.biome);
+    if (tint !== null) {
+      mesh.add(buildAtmosphere(displayR, tint, 1.0));
     }
     return mesh;
   }
