@@ -177,7 +177,13 @@ function loop(t) {
 
   ship.update(dt);
   sceneManager.update(dt, totalT);
-  skybox.rotation.y += dt * 0.001;
+  // Parallax — each layer rotates at a slightly different rate so distant
+  // and near stars don't move in lockstep. Sells depth as the camera turns.
+  const layers = skybox.userData.layers || [];
+  const rates = [0.0004, 0.0008, 0.0014];
+  for (let i = 0; i < layers.length; i++) {
+    layers[i].rotation.y += dt * (rates[i] || 0.001);
+  }
 
   const target = sceneManager.findCrosshairTarget(camera);
 
