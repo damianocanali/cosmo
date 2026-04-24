@@ -9,6 +9,15 @@ export function createRenderer(canvas) {
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.setClearColor(0x000000);
+  // Filmic HDR pipeline — ACES compresses bright sources (stars, emissives)
+  // back into the display range so bloom looks natural rather than blown.
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.0;
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+  // Soft shadows from the star light. PCFSoftShadowMap is the cheapest
+  // option that doesn't look like aliased pixel staircases.
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   return renderer;
 }
 
