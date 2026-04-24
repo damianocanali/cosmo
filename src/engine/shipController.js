@@ -40,10 +40,13 @@ export class ShipController {
     this.shipPosition = new THREE.Vector3();
 
     this.throttle = 0; // 0..1 — ramps up as you hold W
-    this.maxSpeed = 400; // units/s at boost
-    this.cruiseSpeed = 120;
-    this.accel = 180;
-    this.drag = 0.995; // very light drag so you coast like space
+    // Tuned for "easy to stop at a planet" rather than realistic space coast.
+    // maxSpeed cut roughly in half from earlier values so boost doesn't blow
+    // past landing corridors; drag bumped so releasing W naturally settles.
+    this.maxSpeed = 180; // units/s at base; boost multiplies up to ~2.6×
+    this.cruiseSpeed = 90;
+    this.accel = 110;
+    this.drag = 0.985; // moderate drag — coasts but settles in ~2 seconds
 
     // View
     this.viewMode = 'cockpit'; // 'cockpit' | 'external'
@@ -193,7 +196,7 @@ export class ShipController {
     }
     this.throttle += (throttleTarget - this.throttle) * Math.min(1, dt * 2.5);
 
-    const effectiveAccel = this.accel * this.scaleFactor * (1 + boost * 2.5);
+    const effectiveAccel = this.accel * this.scaleFactor * (1 + boost * 1.6);
 
     if (this.controlsEnabled) {
       if (wantForward !== 0) {
@@ -212,7 +215,7 @@ export class ShipController {
       }
     }
 
-    const maxV = this.maxSpeed * this.scaleFactor * (1 + boost * 2);
+    const maxV = this.maxSpeed * this.scaleFactor * (1 + boost * 1.6);
     if (this.velocity.length() > maxV) this.velocity.setLength(maxV);
 
     // Drag is amplified near planets via proximitySlowdown — gives the ship

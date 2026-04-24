@@ -192,7 +192,7 @@ function loop(t) {
     cockpit.update(dt, {
       camera,
       speed: ship.speedNow(),
-      maxSpeed: ship.maxSpeed * ship.scaleFactor * 3.5, // match the boost cap
+      maxSpeed: ship.maxSpeed * ship.scaleFactor * 2.6, // match the boost cap
       position: camera.position,
       sceneName: state.sceneName,
       target,

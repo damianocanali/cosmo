@@ -11,11 +11,11 @@ import { buildAtmosphere, atmosphereTintForBiome } from '../engine/atmosphereSha
 import { buildPlanetMaps } from '../engine/proceduralTextures.js';
 
 // Visual scale multipliers — kernel radii stay pure (used for gravity,
-// determinism). Renderer blows them up so planets read as massive bodies
-// instead of pebbles. Keep PLANET_SCALE and ORBIT_SCALE in lock-step so
-// the system fits the same camera framing.
-const PLANET_SCALE = 3;
-const ORBIT_SCALE = 3;
+// determinism). Renderer blows them up so planets read as massive bodies.
+// PLANET_SCALE is intentionally larger than ORBIT_SCALE so planets visually
+// dominate the frame even as they orbit at wider system radii.
+const PLANET_SCALE = 6;
+const ORBIT_SCALE = 4;
 
 export class SolarSystemScene {
   constructor({ universe, camera, flyCamera, onLandRequest }) {
@@ -133,10 +133,11 @@ export class SolarSystemScene {
     };
     window.addEventListener('keydown', this.landListener);
 
-    // Position camera — pulled back only ~1.5× of original despite the 3×
-    // planet scale, so planets visually dominate the frame instead of just
-    // filling the same proportion as before.
-    this.camera.position.set(0, 45, 150);
+    // Position camera close enough that the inner planets visibly dominate
+    // the frame on first arrival. With PLANET_SCALE=6, a small (r=3) planet
+    // displays as r=18; at this camera distance it fills ~25% of the screen
+    // when overhead.
+    this.camera.position.set(0, 35, 90);
     this.flyCamera.syncFromCameraPosition(new THREE.Vector3(0, 0, 0));
     this.flyCamera.setScale(1);
   }
@@ -247,13 +248,15 @@ export class SolarSystemScene {
       if (d < nearestSurfaceDist) nearestSurfaceDist = d;
     }
 
-    // Proximity slowdown: ramps up as the ship approaches a planet so it
-    // doesn't fly past at boost speed. Influence zone scales with planet size
-    // (well-of-influence ~= 4 planet radii), capping at 4× drag at the surface.
+    // Proximity slowdown: actively grabs the ship as it nears a planet so
+    // you don't fly past landing distance. Range and intensity tuned to feel
+    // like real gravity wells — by the time you're at the landing corridor,
+    // drag is ~10× normal and you settle into a hover almost on its own.
     if (this.flyCamera?.setProximitySlowdown) {
-      const refRange = 60; // units — distance at which slowdown starts
+      const refRange = 120; // units — gravity-well influence radius
       const t01 = Math.max(0, 1 - nearestSurfaceDist / refRange);
-      this.flyCamera.setProximitySlowdown(1 + t01 * 3);
+      // Quadratic ramp — gentle at the edges, strong near the surface.
+      this.flyCamera.setProximitySlowdown(1 + t01 * t01 * 9);
     }
   }
 
