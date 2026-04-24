@@ -10,14 +10,14 @@ export function buildShipModel() {
   // Shared materials — keep palette tight
   const hull = new THREE.MeshStandardMaterial({
     color: 0x2a2a30,
-    roughness: 0.6,
-    metalness: 0.7,
+    roughness: 0.45,
+    metalness: 0.85,
     flatShading: true,
   });
   const hullAccent = new THREE.MeshStandardMaterial({
     color: 0x5a5a68,
-    roughness: 0.4,
-    metalness: 0.8,
+    roughness: 0.3,
+    metalness: 0.95,
     flatShading: true,
   });
   const cockpitGlass = new THREE.MeshStandardMaterial({
@@ -31,13 +31,13 @@ export function buildShipModel() {
   const emissiveCyan = new THREE.MeshStandardMaterial({
     color: 0x88d0ff,
     emissive: 0x66aaff,
-    emissiveIntensity: 2.5,
+    emissiveIntensity: 4.0,
     roughness: 0.3,
   });
   const emissiveAmber = new THREE.MeshStandardMaterial({
     color: 0xffb060,
     emissive: 0xff8030,
-    emissiveIntensity: 1.8,
+    emissiveIntensity: 3.2,
     roughness: 0.3,
   });
   const engineGlow = new THREE.MeshBasicMaterial({

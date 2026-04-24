@@ -9,17 +9,17 @@
 import * as THREE from 'three';
 
 const SUIT = new THREE.MeshStandardMaterial({
-  color: 0xc8c0b0, roughness: 0.6, metalness: 0.1, flatShading: true,
+  color: 0xc8c0b0, roughness: 0.55, metalness: 0.25, flatShading: true,
 });
 const SUIT_DARK = new THREE.MeshStandardMaterial({
   color: 0x2a2a30, roughness: 0.7, metalness: 0.2, flatShading: true,
 });
 const VISOR = new THREE.MeshStandardMaterial({
   color: 0x202830, roughness: 0.15, metalness: 0.9,
-  emissive: 0xffb060, emissiveIntensity: 0.3,
+  emissive: 0xffb060, emissiveIntensity: 2.5,
 });
 const ACCENT = new THREE.MeshStandardMaterial({
-  color: 0x88d0ff, emissive: 0x66aaff, emissiveIntensity: 1.4, roughness: 0.3,
+  color: 0x88d0ff, emissive: 0x66aaff, emissiveIntensity: 3.0, roughness: 0.3,
 });
 
 export function buildAstronautBody() {
