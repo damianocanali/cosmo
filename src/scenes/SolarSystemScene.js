@@ -266,6 +266,10 @@ export class SolarSystemScene {
     };
   }
 
+  getStarWorldPosition() {
+    return this.star ? this.star.position : null;
+  }
+
   dispose() {
     if (this.landListener) {
       window.removeEventListener('keydown', this.landListener);

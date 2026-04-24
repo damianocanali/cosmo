@@ -23,6 +23,7 @@ import {
 
 import { createRenderer, createCamera, attachResize } from './engine/renderer.js';
 import { ShipController } from './engine/shipController.js';
+import { PostFX } from './engine/postprocessing.js';
 import { CharacterController } from './engine/characterController.js';
 import { Cockpit } from './engine/cockpit.js';
 import { createSkybox } from './engine/skybox.js';
@@ -46,6 +47,11 @@ const threeScene = new THREE.Scene();
 threeScene.fog = DEFAULT_FOG;
 const camera = createCamera();
 attachResize(renderer, camera);
+
+const postfx = new PostFX(renderer, threeScene, camera);
+window.addEventListener('resize', () => {
+  postfx.setSize(window.innerWidth, window.innerHeight);
+});
 
 // Ship controller replaces FlyCamera. It exposes the same speedNow() / vel API
 // so the HUD keeps working unchanged.
@@ -208,7 +214,11 @@ function loop(t) {
     : { pos: ship.shipPosition, heading: ship.heading };
   radar.draw({ mapData, ship: radarShip });
 
-  renderer.render(threeScene, camera);
+  // Pipe the active scene's star (if any) to god-rays. Galaxy / black hole /
+  // surface scenes return null so god-rays disables itself for that frame.
+  const starPos = sceneManager.activeScene?.getStarWorldPosition?.() ?? null;
+  postfx.setStarPosition(starPos);
+  postfx.render(dt);
   requestAnimationFrame(loop);
 }
 
