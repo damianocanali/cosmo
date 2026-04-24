@@ -63,14 +63,17 @@ export class CharacterController {
       if (e.code === 'KeyC') this.toggleView();
     };
     this._keyup = (e) => { this.keys[e.code] = false; };
+    // Pointer-lock-style look — same model as ShipController. Click the
+    // canvas to lock; Esc releases. mouseLook tracks the lock state via the
+    // shared `pointerlockchange` event.
     this._mousedown = () => {
       if (!this.active) return;
-      this.mouseLook = true;
-      this.canvas.style.cursor = 'none';
+      if (document.pointerLockElement !== this.canvas) {
+        this.canvas.requestPointerLock?.();
+      }
     };
-    this._mouseup = () => {
-      this.mouseLook = false;
-      this.canvas.style.cursor = 'crosshair';
+    this._pointerlockchange = () => {
+      this.mouseLook = document.pointerLockElement === this.canvas;
     };
     this._mousemove = (e) => {
       if (!this.active || !this.mouseLook) return;
@@ -82,7 +85,7 @@ export class CharacterController {
     window.addEventListener('keydown',   this._keydown);
     window.addEventListener('keyup',     this._keyup);
     this.canvas.addEventListener('mousedown', this._mousedown);
-    window.addEventListener('mouseup',   this._mouseup);
+    document.addEventListener('pointerlockchange', this._pointerlockchange);
     window.addEventListener('mousemove', this._mousemove);
   }
 
@@ -90,7 +93,7 @@ export class CharacterController {
     window.removeEventListener('keydown',   this._keydown);
     window.removeEventListener('keyup',     this._keyup);
     this.canvas.removeEventListener('mousedown', this._mousedown);
-    window.removeEventListener('mouseup',   this._mouseup);
+    document.removeEventListener('pointerlockchange', this._pointerlockchange);
     window.removeEventListener('mousemove', this._mousemove);
     this.threeScene.remove(this.body);
     this.camera.remove(this.hands);

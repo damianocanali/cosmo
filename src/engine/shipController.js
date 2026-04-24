@@ -96,12 +96,19 @@ export class ShipController {
     window.addEventListener('keydown', this._keydown);
     window.addEventListener('keyup', this._keyup);
 
+    // Pointer-lock-style look: click the canvas once to lock the cursor,
+    // then mouse movement rotates the camera until Esc (browser-default
+    // release) or the canvas loses focus. No click-and-hold.
     this._mousedown = () => {
       if (!this.controlsEnabled) return;
-      this.mouseLook = true;
-      this.canvas.style.cursor = 'none';
+      if (document.pointerLockElement !== this.canvas) {
+        this.canvas.requestPointerLock?.();
+      }
     };
-    this._mouseup   = () => { this.mouseLook = false; this.canvas.style.cursor = 'crosshair'; };
+    this._pointerlockchange = () => {
+      this.mouseLook = document.pointerLockElement === this.canvas;
+      this.canvas.style.cursor = this.mouseLook ? 'none' : 'crosshair';
+    };
     this._mousemove = (e) => {
       if (!this.controlsEnabled || !this.mouseLook) return;
       this.cameraYaw   -= e.movementX * 0.003;
@@ -109,7 +116,7 @@ export class ShipController {
       this.cameraPitch = Math.max(-Math.PI / 2 + 0.1, Math.min(Math.PI / 2 - 0.1, this.cameraPitch));
     };
     this.canvas.addEventListener('mousedown', this._mousedown);
-    window.addEventListener('mouseup', this._mouseup);
+    document.addEventListener('pointerlockchange', this._pointerlockchange);
     window.addEventListener('mousemove', this._mousemove);
   }
 
@@ -117,7 +124,7 @@ export class ShipController {
     window.removeEventListener('keydown', this._keydown);
     window.removeEventListener('keyup', this._keyup);
     this.canvas.removeEventListener('mousedown', this._mousedown);
-    window.removeEventListener('mouseup', this._mouseup);
+    document.removeEventListener('pointerlockchange', this._pointerlockchange);
     window.removeEventListener('mousemove', this._mousemove);
     this.threeScene.remove(this.shipModel);
   }

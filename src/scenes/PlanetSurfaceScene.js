@@ -242,8 +242,13 @@ export class PlanetSurfaceScene {
     this.character.setActive(false);
 
     // ── Esc to leave to space ──────────────────────────────────────
+    // First Esc press releases the pointer lock (browser default). Only the
+    // SECOND Esc — after the cursor is back — actually lifts off, so users
+    // who just want their cursor back to use the panel don't get launched.
     this.escListener = (e) => {
-      if (e.code === 'Escape' && this.mode === 'in_ship' && this.onLeave) {
+      if (e.code !== 'Escape') return;
+      if (document.pointerLockElement) return;
+      if (this.mode === 'in_ship' && this.onLeave) {
         this.onLeave();
       }
     };
