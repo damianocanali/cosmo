@@ -8,6 +8,7 @@ import {
 } from '../kernel/index.js';
 import { getGlowTexture } from '../engine/renderer.js';
 import { buildAtmosphere, atmosphereTintForBiome } from '../engine/atmosphereShader.js';
+import { buildPlanetMaps } from '../engine/proceduralTextures.js';
 
 // Visual scale multipliers — kernel radii stay pure (used for gravity,
 // determinism). Renderer blows them up so planets read as massive bodies
@@ -91,7 +92,8 @@ export class SolarSystemScene {
       const pData = derivePlanet(u, i);
       const displayR = pData.radius * PLANET_SCALE;
       const displayOrbit = pData.orbitRadius * ORBIT_SCALE;
-      const mesh = this.makePlanetMesh(pData, displayR);
+      const planetSeed = hashString(u.id + '|planet|' + i);
+      const mesh = this.makePlanetMesh(pData, displayR, planetSeed);
       mesh.position.set(
         Math.cos(pData.initialAngle) * displayOrbit,
         (rng() - 0.5) * 2 * PLANET_SCALE,
@@ -139,21 +141,16 @@ export class SolarSystemScene {
     this.flyCamera.setScale(1);
   }
 
-  makePlanetMesh(pData, displayR) {
-    const colorMap = {
-      molten:    new THREE.Color().setHSL(0.04, 0.7, 0.35),
-      desert:    new THREE.Color().setHSL(0.08, 0.5, 0.5),
-      temperate: new THREE.Color().setHSL(0.32, 0.5, 0.45),
-      ocean:     new THREE.Color().setHSL(0.58, 0.5, 0.4),
-      gas_giant: new THREE.Color().setHSL(0.55, 0.4, 0.55),
-      ice:       new THREE.Color().setHSL(0.55, 0.15, 0.8),
-    };
+  makePlanetMesh(pData, displayR, seed) {
+    const { albedo, normal } = buildPlanetMaps(pData.biome, seed);
     const mat = new THREE.MeshStandardMaterial({
-      color: colorMap[pData.biome] || colorMap.temperate,
+      map: albedo,
+      normalMap: normal,
+      normalScale: new THREE.Vector2(0.8, 0.8),
       roughness: 0.85,
       metalness: 0.05,
     });
-    const mesh = new THREE.Mesh(new THREE.SphereGeometry(displayR, 48, 48), mat);
+    const mesh = new THREE.Mesh(new THREE.SphereGeometry(displayR, 64, 64), mat);
     mesh.castShadow = true;
     mesh.receiveShadow = true;
 
